@@ -1,5 +1,7 @@
 // import {sliceIndex} from "/js/main.js";
 
+const canvas = document.querySelector("canvas");
+
 function clamp(val, low, high) {
   if (val > high) {
     val = high;
@@ -19,10 +21,21 @@ document.addEventListener("keydown", (e) => {
     sliceIndex = clamp(sliceIndex + 1, 0, volumeDim[2] - 1);
   }
   else if (keyName == "h") {
-    h_flip = ~h_flip;
+    hFlip = !hFlip;
   }
   else if (keyName == 'v') {
-    v_flip = ~v_flip;
+    vFlip = !vFlip;
   }
+  else if (keyName == 'm') {
+    showMasks = !showMasks;
+  }
+});
 
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  let dz = -1
+  if (e.deltaY > 0) {
+    dz = 1;
+  }
+  sliceIndex = clamp(sliceIndex + dz, 0, volumeDim[2] - 1);
 });

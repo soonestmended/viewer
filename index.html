@@ -2,14 +2,38 @@
 
 <html>
   <head>
+    <link rel="stylesheet" href="css/main.css"/>
     <meta charset="utf-8">
     <title>Volume Viewer</title>
-  </head>
-  <body>
-    <canvas width="512" height="512"></canvas>
     <script src = "lib/hdf5.js"></script>
     <script type = "module" src = "js/main.js"></script>
     <script type = "module" src = "js/events.js"></script>
-    Foo
+  </head>
+  <body>
+    <ul class="menu">
+      <li class="dropdown">
+        <a>File</a>
+        <div class="dropdown-content">
+          <a href="javascript:openFile()">Open</a>
+        </div>
+
+      <li class="menu"><a href="#news">News</a></li>
+      <li class="dropdown">
+        <a href="javascript:void(0)" class="dropbtn">Dropdown</a>
+        <div class="dropdown-content">
+          <a href="#">Link 1</a>
+          <a href="#">Link 2</a>
+          <a href="#">Link 3</a>
+        </div>
+      </li>
+    </ul>
+    <div class="canvas">
+      <canvas width="512" height="512"></canvas>
+    </div>
+    <ul class="dataset" id="dataset-list">
+      <li><label><input type="radio" name="dataset"/>Dataset 1</label></li>
+      <li><label><input type="radio" name="dataset"/>Dataset 2</label></li>
+      <li><label><input type="radio" name="dataset"/>Dataset 3</label></li>
+    </ul>
   </body>
 </html>

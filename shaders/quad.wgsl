@@ -13,7 +13,7 @@ struct ViewParams {
   window: f32,
   level: f32,
   slicePos: f32,
-  pad_0: f32,
+  show_masks: f32,
   h_flip: f32,
   v_flip: f32,
   pad_1: f32,
@@ -36,8 +36,7 @@ fn vertexMain(input: VertexInput) -> VertexOutput  {
 
 @group(0) @binding(1) var smpDat: sampler;
 @group(0) @binding(2) var texDat: texture_3d<f32>;
-@group(0) @binding(3) var smpLbl: sampler;
-@group(0) @binding(4) var texLbl: texture_3d<f32>;
+@group(0) @binding(3) var texLbl: texture_3d<u32>;
 
 const COLOR_MAP = array(
   vec4f(1.0),
@@ -54,7 +53,14 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
   let texCoord = vec2f(abs(viewInfo.h_flip - input.texCoord.x), abs(viewInfo.v_flip - input.texCoord.y));
   let hu_val = textureSample(texDat, smpDat, vec3f(texCoord, viewInfo.slicePos)).r;
   let hu_range = vec2f(viewInfo.level - (viewInfo.window / 2.0), viewInfo.level + (viewInfo.window / 2.0));
-  let voxel_class = textureSample(texLbl, smpLbl, vec3f(texCoord, viewInfo.slicePos)).r;
-  let color = COLOR_MAP[voxel_class] * vec4f((hu_val - hu_range.x) / (hu_range.y - hu_range.x));
-  return color;
+  let texLbl_dim = textureDimensions(texLbl);
+  let texCoord_uint = vec3f(texCoord, viewInfo.slicePos) * vec3f(texLbl_dim);
+  let voxel_class = textureLoad(texLbl, vec3u(texCoord_uint), 0).r;
+
+  let intensity = vec4f(vec3f((hu_val - hu_range.x) / (hu_range.y - hu_range.x)), 1.0);
+  var color = COLOR_MAP[voxel_class];
+  if (viewInfo.show_masks < .5) {
+    color = COLOR_MAP[0];
+  }
+  return color * intensity;
 }

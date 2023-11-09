@@ -1,3 +1,79 @@
+// import h5wasm from "https://cdn.jsdelivr.net/npm/h5wasm@0.4.9/dist/esm/hdf5_hl.js";
+// const Module = await h5wasm.ready;
+// const {FS} = Module;
+
+
+window.openFile = async () => {
+  let fileHandle;
+  [fileHandle] = await window.showOpenFilePicker();
+  const file = await fileHandle.getFile();
+  const contents = await file.arrayBuffer();
+  let f = new hdf5.File(contents);
+  // FS.writeFile("current.h5", new Uint8Array(contents), {flags: "w+"});
+  // let f = new h5wasm.File("current.h5", "r");
+  let keys = f.keys;
+  if (keys.includes('dat')) {
+    testDat = f.get('dat');
+  } else if (keys.includes('data')) {
+    testDat = f.get('data');
+  } else {
+    testDat = f.get(keys[0]);
+  }
+  if (keys.includes('lbl')) {
+    testLbl = f.get('lbl');
+  }
+
+  console.log("Loaded volume successfully.");
+  console.log("Dat: " + testDat.shape + " , " + testDat.dtype);
+  console.log("Lbl: " + testLbl.shape + " , " + testLbl.dtype);
+  updateTextures(testDat, testLbl, [testDat.shape[2], testDat.shape[1], testDat.shape[0]]);
+  updateBindGroup();
+};
+
+let textureDat, textureLbl;
+let mainBindGroup;
+
+function updateTextures(dat, lbl, dim) {
+  volumeDim[0] = dim[0];
+  volumeDim[1] = dim[1];
+  volumeDim[2] = dim[2];
+  textureDat = device.createTexture({
+    dimension: "3d",
+    size: volumeDim,
+    format: 'r32float',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  device.queue.writeTexture( {texture: textureDat}, Float32Array.from(dat.value), {bytesPerRow: volumeDim[0]*4, rowsPerImage: volumeDim[1]}, volumeDim );
+
+  textureLbl = device.createTexture({
+    dimension: "3d",
+    size: volumeDim,
+    format: 'r8uint',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  device.queue.writeTexture( {texture: textureLbl}, Uint8Array.from(lbl.value), {bytesPerRow: volumeDim[0]*1, rowsPerImage: volumeDim[1]}, volumeDim );
+}
+
+function updateBindGroup() {
+  mainBindGroup = device.createBindGroup({
+    label: "Uniforms bind group",
+    layout: mainBindgroupLayout, // Updated Line
+    entries: [{
+      binding: 0,
+      resource: { buffer: uniformBuffer },
+    }, {
+      binding: 1,
+      resource: samplerDat,
+    }, {
+      binding: 2,
+      resource: textureDat.createView(),
+    }, {
+      binding: 3,
+      resource: textureLbl.createView(),
+    }],
+  });
+}
+
 const canvas = document.querySelector("canvas");
 
 if (!navigator.gpu) {
@@ -9,7 +85,8 @@ if (!adapter) {
   throw new Error("No appropriate GPUAdapter found.");
 }
 
-const device = await adapter.requestDevice();
+const device = await adapter.requestDevice({requiredLimits: {maxBufferSize: 1073741824}});
+console.log("Max buffer size: " + device.limits.maxBufferSize);
 const context = canvas.getContext("webgpu");
 const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
 context.configure({
@@ -19,12 +96,13 @@ context.configure({
 
 // GLOBALS:
 window.sliceIndex = 0;
-window.volumeDim = [512, 512, 97]
-window.h_flip = false;
-window.v_flip = false;
+window.volumeDim = [0, 0, 0]
+window.hFlip = false;
+window.vFlip = true;
+window.showMasks = true;
 let shaders = {};
 let testDat, testLbl;
-const HF5_URL = "test.hf5";
+const HF5_URL = "00545.hf5";
 const SHADER_URLS = ["shaders/quad.wgsl"];
 
 await fetch(HF5_URL)
@@ -32,18 +110,22 @@ await fetch(HF5_URL)
     return response.arrayBuffer();
   })
   .then(function(buffer) {
+
     let f = new hdf5.File(buffer);
-    testDat = f.get('dat');
-    testLbl = f.get('lbl');
+    testDat = f.get('dat_5x3x3');
+    testLbl = f.get('lbl_5x3x3');
     console.log("Loaded volume successfully.");
     console.log("Dat: " + testDat.shape + " , " + testDat.dtype);
     console.log("Lbl: " + testLbl.shape + " , " + testLbl.dtype);
-    volumeDim[0] = testDat.shape[2];
-    volumeDim[1] = testDat.shape[1];
-    volumeDim[2] = testDat.shape[0];
+    updateTextures(testDat, testLbl, [testDat.shape[2], testDat.shape[1], testDat.shape[0]]);
+//    volumeDim[0] = testDat.shape[2];
+//    volumeDim[1] = testDat.shape[1];
+//    volumeDim[2] = testDat.shape[0];
+
   })
-  .catch(function() {
+  .catch(function(error) {
     console.log("Failed to load image volume");
+    console.log(error);
   });
 
 // load shaders -- block on this step
@@ -53,7 +135,6 @@ await Promise.all(SHADER_URLS.map(s => fetch(s).then(r => r.text()))).then((valu
   console.log("Loaded " + values.length + " shaders.");
 });
 
-console.log(testDat.value[42341]);
 
 function render() {
   const encoder = device.createCommandEncoder();
@@ -68,11 +149,12 @@ function render() {
     }]
   });
   pass.setPipeline(mainPipeline);
-  pass.setBindGroup(0, mainBindgroup); // Updated!
+  pass.setBindGroup(0, mainBindGroup); // Updated!
   pass.setVertexBuffer(0, vertexBuffer);
   uniforms[2] = (sliceIndex + .5) / volumeDim[2];
-  uniforms[4] = h_flip ? 1.0 : 0.0;
-  uniforms[5] = v_flip ? 1.0 : 0.0;
+  uniforms[3] = showMasks ? 1.0 : 0.0;
+  uniforms[4] = hFlip ? 1.0 : 0.0;
+  uniforms[5] = vFlip ? 1.0 : 0.0;
   device.queue.writeBuffer(uniformBuffer, 0, uniforms);
   pass.draw(vertices.length / 4);
 
@@ -82,21 +164,7 @@ function render() {
   requestAnimationFrame(render);
 }
 
-const textureDat = device.createTexture({
-  dimension: "3d",
-  size: volumeDim,
-  format: 'r32float',
-  usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-});
-device.queue.writeTexture( {texture: textureDat}, Float32Array.from(testDat.value), {bytesPerRow: volumeDim[0]*4, rowsPerImage: volumeDim[1]}, volumeDim );
 
-const textureLbl = device.createTexture({
-  dimension: "3d",
-  size: volumeDim,
-  format: 'r8uint',
-  usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-});
-device.queue.writeTexture( {texture: textureLbl}, Uint8Array.from(testLbl.value), {bytesPerRow: volumeDim[0]*1, rowsPerImage: volumeDim[1]}, volumeDim );
 
 const samplerDat = device.createSampler({magFilter: "nearest", minFilter: "nearest"});
 const samplerLbl = device.createSampler({magFilter: "nearest", minFilter: "nearest"});
@@ -171,36 +239,12 @@ const mainBindgroupLayout = device.createBindGroupLayout({
   {
     binding: 3,
     visibility: GPUShaderStage.FRAGMENT,
-    sampler: {type: "non-filtering"}
-  },
-  {
-    binding: 4,
-    visibility: GPUShaderStage.FRAGMENT,
     texture: {sampleType: "uint", viewDimension: "3d"},
   }],
 });
 
 // Create a bind group to pass the grid uniforms into the pipeline
-const mainBindgroup = device.createBindGroup({
-  label: "Uniforms bind group",
-  layout: mainBindgroupLayout, // Updated Line
-  entries: [{
-    binding: 0,
-    resource: { buffer: uniformBuffer },
-  }, {
-    binding: 1,
-    resource: samplerDat,
-  }, {
-    binding: 2,
-    resource: textureDat.createView(),
-  }, {
-    binding: 3,
-    resource: samplerLbl,
-  }, {
-    binding: 4,
-    resource: textureLbl.createView(),
-  }],
-});
+updateBindGroup();
 
 const pipelineLayout = device.createPipelineLayout({
   label: "Main Pipeline Layout",
