@@ -39,3 +39,23 @@ canvas.addEventListener("wheel", (e) => {
   }
   sliceIndex = clamp(sliceIndex + dz, 0, volumeDim[2] - 1);
 });
+
+
+
+canvas.addEventListener("mousemove", (e) => {
+  e.preventDefault();
+  if (e.buttons == 1) {
+    if (e.movementX > 0) {
+      window.displayWindow += 1;
+    }
+    else if (e.movementX < 0) {
+      window.displayWindow -= 1;
+    }
+    if (e.movementY > 0) {
+     window.displayLevel -= 1; 
+    }
+    else if (e.movementY < 0){
+      window.displayLevel += 1;
+    }
+  }
+});

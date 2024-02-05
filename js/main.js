@@ -95,6 +95,8 @@ context.configure({
 });
 
 // GLOBALS:
+window.displayWindow = 400;
+window.displayLevel = 50;
 window.sliceIndex = 0;
 window.volumeDim = [0, 0, 0]
 window.hFlip = false;
@@ -102,7 +104,7 @@ window.vFlip = true;
 window.showMasks = true;
 let shaders = {};
 let testDat, testLbl;
-const HF5_URL = "00545.hf5";
+const HF5_URL = "00546.hf5";
 const SHADER_URLS = ["shaders/quad.wgsl"];
 
 await fetch(HF5_URL)
@@ -151,6 +153,8 @@ function render() {
   pass.setPipeline(mainPipeline);
   pass.setBindGroup(0, mainBindGroup); // Updated!
   pass.setVertexBuffer(0, vertexBuffer);
+  uniforms[0] = displayWindow;
+  uniforms[1] = displayLevel;
   uniforms[2] = (sliceIndex + .5) / volumeDim[2];
   uniforms[3] = showMasks ? 1.0 : 0.0;
   uniforms[4] = hFlip ? 1.0 : 0.0;
@@ -163,8 +167,6 @@ function render() {
   device.queue.submit([encoder.finish()]);
   requestAnimationFrame(render);
 }
-
-
 
 const samplerDat = device.createSampler({magFilter: "nearest", minFilter: "nearest"});
 const samplerLbl = device.createSampler({magFilter: "nearest", minFilter: "nearest"});
